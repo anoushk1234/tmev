@@ -1,6 +1,8 @@
-use std::error::Error;
-
 use reqwest::Response;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use serde_json::Value;
+use std::error::Error;
 
 pub async fn get_arb_feed() -> Result<Response, Box<dyn Error>> {
     let url = "https://jito.retool.com/api/public/7e37389a-c991-4fb3-a3cd-b387859c7da1/query?queryName=arb_feed";
@@ -11,10 +13,6 @@ pub async fn get_arb_feed() -> Result<Response, Box<dyn Error>> {
     // println!("{:#?}", resp.text().await);
     Ok(resp)
 }
-
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
-use serde_json::Value;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
