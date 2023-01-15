@@ -12,3 +12,7 @@ crossterm = { version = "0.25.0" }
 serde = { version = "1", features = ["derive"] }
 tui="0.19.0"
 clap = { version = "4.1.1", features = ["derive"] }
+reqwest = {version="0.11", features=["json"]}
+serde_derive="1.0.152"
+serde_json="1.0.91"
+spinners = "4.1.0"
