@@ -1,37 +1,51 @@
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use std::{io, thread, time::Duration};
-use tui::{
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Margin},
-    style::{Color, Modifier, Style},
-    text::Span,
-    widgets::{Block, Borders, Cell, Row, Table, Widget},
-    Terminal,
-};
+use clap::arg;
+use clap::command;
+use clap::ArgMatches;
+use clap::Command;
+use clap::Parser;
+// use crossterm::{
+//     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+//     execute,
+//     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+// };
+// use std::{io, thread, time::Duration};
+// use tui::{
+//     backend::CrosstermBackend,
+//     layout::{Constraint, Direction, Layout, Margin},
+//     style::{Color, Modifier, Style},
+//     text::{Span, Spans},
+//     widgets::{Block, Borders, Cell, Row, Table, Widget},
+//     Terminal,
+// };
 
-fn main() -> Result<(), io::Error> {
-    // setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+/// Simple program to greet a person
+// #[derive(Parser, Debug, Clone)]
+// #[command(author, version, about, long_about = None)]
+// struct Args {
+//     #[arg(short, long)]
+//     address: String,
+// }
 
-    // terminal.draw(f)
-    thread::sleep(Duration::from_millis(5000));
+fn main() {
+    let cmd = Command::new("tmev").args(&[
+        arg!(--address <ADDRESS> "An address to filter transactions by"),
+        arg!([arbs] "View a table of the recent arbs in order of most profitable"),
+    ]);
 
-    // restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    let matches = cmd.get_matches();
 
-    Ok(())
+    for arg in matches.ids().into_iter() {
+        let a = arg.as_str();
+        match a {
+            "address" => {
+                println!("{}", a);
+            }
+            "arbs" => {
+                println!("{}", a);
+            }
+            _ => {
+                // overview ui
+            }
+        }
+    }
 }
