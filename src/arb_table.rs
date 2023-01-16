@@ -21,26 +21,26 @@ use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, TableState,Tabs},
-    Frame, Terminal, text::{Span, Spans},
+    text::{Span, Spans},
+    widgets::{Block, Borders, Cell, Row, Table, TableState, Tabs},
+    Frame, Terminal,
 };
 
-pub struct App<'a>{
+pub struct App<'a> {
     state: TableState,
     title: &'a str,
     tabs: TabsState<'a>,
     items: Vec<Vec<String>>,
-    
 }
 // unsafe impl Send for App {}
 // unsafe impl Sync for App {}
-impl<'a>App<'a>{
-    pub fn new(title: &'a str, rows: Vec<Vec<String>>) -> App<'a>{
+impl<'a> App<'a> {
+    pub fn new(title: &'a str, rows: Vec<Vec<String>>) -> App<'a> {
         App {
             title,
             state: TableState::default(),
             items: rows,
-            tabs: TabsState::new(vec!["arbs", "bundles"])
+            tabs: TabsState::new(vec!["arbs", "bundles"]),
         }
     }
     pub fn next(&mut self) {
@@ -138,7 +138,7 @@ pub async fn display_table<'a>(
     Ok(terminal)
 }
 
-async fn run_app<'a,B: Backend + std::marker::Send>(
+async fn run_app<'a, B: Backend + std::marker::Send>(
     terminal: &mut Terminal<B>,
     mut app: App<'a>,
 ) -> io::Result<()> {
@@ -214,28 +214,26 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     f.render_widget(tabs, chunks[0]);
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1]),
-       // 1 => draw_second_tab(f, app, chunks[1]),
+        // 1 => draw_second_tab(f, app, chunks[1]),
         _ => {}
     };
 }
 
-fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App,  
-    area: Rect,
-)
+fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
     B: Backend,
 {
     let chunks = Layout::default()
         .constraints(
             [
-                Constraint::Length(9),
+                Constraint::Length(30),
                 Constraint::Min(8),
                 Constraint::Length(7),
             ]
             .as_ref(),
-        ).split(area);
+        )
+        .split(area);
     ui(f, app, chunks[0]);
-
 }
 //draws our table
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
