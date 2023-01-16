@@ -22,7 +22,7 @@ use tui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Cell, Row, Table, TableState, Tabs},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Tabs, Wrap},
     Frame, Terminal,
 };
 
@@ -102,9 +102,10 @@ impl<'a> TabsState<'a> {
     pub fn previous(&mut self) {
         if self.index > 0 {
             self.index -= 1;
-        } else {
-            self.index = self.titles.len() - 1;
         }
+        // else {
+        //     self.index = self.titles.len() - 1;
+        // }
     }
 }
 
@@ -119,7 +120,7 @@ pub async fn display_table<'a>(
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::new("JITO MEV STATS", rows);
+    let app = App::new("JITO SEARCHER TERMINAL 🤑", rows);
     let res = run_app(&mut terminal, app).await;
 
     // restore terminal
@@ -138,6 +139,21 @@ pub async fn display_table<'a>(
     Ok(terminal)
 }
 
+fn draw_text<B>(f: &mut Frame<B>, area: Rect)
+where
+    B: Backend,
+{
+    let text = vec![Spans::from("quit - [q] | reload - [r] | tab-change - [↔]")];
+    let block = Block::default().borders(Borders::ALL).title(Span::styled(
+        "Legend",
+        Style::default()
+            .fg(Color::Gray)
+            .add_modifier(Modifier::BOLD),
+    ));
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
 async fn run_app<'a, B: Backend + std::marker::Send>(
     terminal: &mut Terminal<B>,
     mut app: App<'a>,
@@ -209,8 +225,14 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .collect();
     let tabs = Tabs::new(titles)
         .block(Block::default().borders(Borders::ALL).title(app.title))
-        .highlight_style(Style::default().fg(Color::Yellow))
+        .highlight_style(Style::default().bg(Color::Blue).fg(Color::Green))
         .select(app.tabs.index);
+    let block = Block::default().borders(Borders::ALL).title(Span::styled(
+        "Footer",
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+    ));
     f.render_widget(tabs, chunks[0]);
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1]),
@@ -226,14 +248,16 @@ where
     let chunks = Layout::default()
         .constraints(
             [
-                Constraint::Length(30),
-                Constraint::Min(8),
-                Constraint::Length(7),
+                Constraint::Length(20),
+                Constraint::Length(3),
+                Constraint::Length(2),
             ]
             .as_ref(),
         )
         .split(area);
+
     ui(f, app, chunks[0]);
+    draw_text(f, chunks[1]);
 }
 //draws our table
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
