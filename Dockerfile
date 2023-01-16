@@ -4,6 +4,8 @@ WORKDIR /usr/src/app
 
 COPY ./searcher-api .
 
+EXPOSE 8080
+
 CMD [ "cargo","run","--release" ] 
 
-EXPOSE 8080
+
