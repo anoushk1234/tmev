@@ -19,23 +19,28 @@ use tokio::time::sleep;
 use tokio_util::task::LocalPoolHandle;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, TableState},
-    Frame, Terminal,
+    widgets::{Block, Borders, Cell, Row, Table, TableState,Tabs},
+    Frame, Terminal, text::{Span, Spans},
 };
 
-pub struct App {
+pub struct App<'a>{
     state: TableState,
+    title: &'a str,
+    tabs: TabsState<'a>,
     items: Vec<Vec<String>>,
+    
 }
 // unsafe impl Send for App {}
 // unsafe impl Sync for App {}
-impl App {
-    pub fn new(rows: Vec<Vec<String>>) -> App {
+impl<'a>App<'a>{
+    pub fn new(title: &'a str, rows: Vec<Vec<String>>) -> App<'a>{
         App {
+            title,
             state: TableState::default(),
             items: rows,
+            tabs: TabsState::new(vec!["arbs", "bundles"])
         }
     }
     pub fn next(&mut self) {
@@ -73,9 +78,37 @@ impl App {
 
         open::that(explorer).unwrap();
     }
+    pub fn on_right(&mut self) {
+        self.tabs.next();
+    }
+
+    pub fn on_left(&mut self) {
+        self.tabs.previous();
+    }
+}
+pub struct TabsState<'a> {
+    pub titles: Vec<&'a str>,
+    pub index: usize,
 }
 
-pub async fn display_table(
+impl<'a> TabsState<'a> {
+    pub fn new(titles: Vec<&'a str>) -> TabsState {
+        TabsState { titles, index: 0 }
+    }
+    pub fn next(&mut self) {
+        self.index = (self.index + 1) % self.titles.len();
+    }
+
+    pub fn previous(&mut self) {
+        if self.index > 0 {
+            self.index -= 1;
+        } else {
+            self.index = self.titles.len() - 1;
+        }
+    }
+}
+
+pub async fn display_table<'a>(
     rows: Vec<Vec<String>>,
 ) -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn Error>> {
     // setup terminal
@@ -86,7 +119,7 @@ pub async fn display_table(
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::new(rows);
+    let app = App::new("JITO MEV STATS", rows);
     let res = run_app(&mut terminal, app).await;
 
     // restore terminal
@@ -105,9 +138,9 @@ pub async fn display_table(
     Ok(terminal)
 }
 
-async fn run_app<B: Backend + std::marker::Send>(
+async fn run_app<'a,B: Backend + std::marker::Send>(
     terminal: &mut Terminal<B>,
-    mut app: App,
+    mut app: App<'a>,
 ) -> io::Result<()> {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Vec<String>>>(9000);
     let local_set = LocalPoolHandle::new(1);
@@ -125,13 +158,15 @@ async fn run_app<B: Backend + std::marker::Send>(
     // newitems = app.items.clone();
     Ok(loop {
         // app.items = newitems.clone();
-        terminal.draw(|f| ui(f, &mut app))?;
+        terminal.draw(|f| draw(f, &mut app))?;
 
         if let Event::Key(key) = event::read()? {
             match key.code {
                 KeyCode::Char('q') => break,
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
+                KeyCode::Right => app.on_right(),
+                KeyCode::Left => app.on_left(),
                 KeyCode::Char('r') => {
                     terminal.clear();
                     sleep(Duration::from_millis(500));
@@ -158,15 +193,57 @@ async fn run_app<B: Backend + std::marker::Send>(
                 }
             }
         }
+        // Possibly add updating here?
     })
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
-    // println!("redraw :{:?}", app.items.len());
-    let rects = Layout::default()
-        .constraints([Constraint::Percentage(100)].as_ref())
-        .margin(2)
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+    let chunks = Layout::default()
+        .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(f.size());
+    let titles = app
+        .tabs
+        .titles
+        .iter()
+        .map(|t| Spans::from(Span::styled(*t, Style::default().fg(Color::Green))))
+        .collect();
+    let tabs = Tabs::new(titles)
+        .block(Block::default().borders(Borders::ALL).title(app.title))
+        .highlight_style(Style::default().fg(Color::Yellow))
+        .select(app.tabs.index);
+    f.render_widget(tabs, chunks[0]);
+    match app.tabs.index {
+        0 => draw_first_tab(f, app, chunks[1]),
+       // 1 => draw_second_tab(f, app, chunks[1]),
+        _ => {}
+    };
+}
+
+fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App,  
+    area: Rect,
+)
+where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints(
+            [
+                Constraint::Length(9),
+                Constraint::Min(8),
+                Constraint::Length(7),
+            ]
+            .as_ref(),
+        ).split(area);
+    ui(f, app, chunks[0]);
+
+}
+//draws our table
+fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    // println!("redraw :{:?}", app.items.len());
+    // let rects = Layout::default()
+    //     .constraints([Constraint::Percentage(70)].as_ref())
+    //     .margin(2)
+    //     .split(area);
 
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     let normal_style = Style::default().bg(Color::LightGreen);
@@ -213,5 +290,5 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             // Constraint::Min(10),
         ])
         .column_spacing(1);
-    f.render_stateful_widget(t, rects[0], &mut app.state);
+    f.render_stateful_widget(t, area, &mut app.state);
 }
