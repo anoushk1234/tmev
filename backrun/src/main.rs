@@ -8,6 +8,7 @@ use std::{path::Path, result, str::FromStr, sync::Arc, time::Duration};
 use crate::event_loops::{block_subscribe_loop, pending_tx_loop, slot_subscribe_loop};
 use clap::Parser;
 use env_logger::TimestampPrecision;
+use futures::FutureExt;
 use histogram::Histogram;
 use jito_protos::bundle::Bundle;
 use jito_protos::convert::{proto_packet_from_versioned_tx, versioned_tx_from_packet};
@@ -44,6 +45,8 @@ use tokio::{runtime::Builder, time::interval};
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use tonic::{Response, Status};
+
+use reqwest;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -245,7 +248,7 @@ async fn maintenance_tick(
     Ok(())
 }
 
-fn print_block_stats(
+async fn print_block_stats(
     block_stats: &mut HashMap<Slot, BlockStats>,
     block: rpc_response::Response<RpcBlockUpdate>,
     leader_schedule: &HashMap<Pubkey, HashSet<Slot>>,
@@ -403,9 +406,27 @@ fn print_block_stats(
                     .max()
                     .unwrap_or(0);
                 // block.value.block.unwrap().transactions.unwrap().get(1).unwrap().meta.unwrap().
+                let client = reqwest::Client::new();
+                let body = serde_json::json!({
+                                "min_bundle_send_slot": min_bundle_send_slot,
+                "max_bundle_send_slot": max_bundle_send_slot,
+                "bundles_landed": bundles_landed.len(),
+                "num_bundles_dropped": num_bundles_sent - bundles_landed.len(),
+                "mempool_txs_landed_no_bundle": mempool_txs_landed_no_bundle.len()
+                             });
+                let res = client
+                    .post("http://0.0.0.0:8080/bundle_stats/create")
+                    .body(body.to_string())
+                    .send()
+                    .await
+                    .unwrap()
+                    .status()
+                    .to_string();
+
                 datapoint_info!(
                     "leader-bundle-stats",
                     ("slot", block.context.slot, i64),
+                    ("res", res, String),
                     ("leader", leader.to_string(), String),
                     ("num_bundles_sent", num_bundles_sent, i64),
                     ("num_bundles_sent_ok", num_bundles_sent_ok, i64),
@@ -565,6 +586,7 @@ async fn run_searcher_loop(
     }
 }
 
+// #[tokio::main]
 fn main() -> Result<()> {
     env_logger::builder()
         .format_timestamp(Some(TimestampPrecision::Micros))

@@ -21,7 +21,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_bundle_stats)
             .service(get_all_bundle_stats)
     })
-    .bind(("localhost", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
 }
