@@ -236,7 +236,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     f.render_widget(tabs, chunks[0]);
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1]),
-        // 1 => draw_second_tab(f, app, chunks[1]),
+        1 => draw_second_tab(f, app, chunks[1]),
         _ => {}
     };
 }
@@ -258,6 +258,24 @@ where
 
     ui(f, app, chunks[0]);
     draw_text(f, chunks[1]);
+}
+fn draw_second_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints(
+            [
+                Constraint::Length(20),
+                Constraint::Length(3),
+                Constraint::Length(2),
+            ]
+            .as_ref(),
+        )
+        .split(area);
+
+    ui(f, app, chunks[0]);
+    // draw_text(f, chunks[1]);
 }
 //draws our table
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
