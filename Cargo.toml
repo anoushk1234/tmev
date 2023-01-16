@@ -3,4 +3,7 @@ members = [
     "backrun",
     "jito_protos",
     "searcher_service_client",
+    "searcher-api"
 ]
+
+# exclude=["searcher-api"]
