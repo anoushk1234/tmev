@@ -407,7 +407,6 @@ fn print_block_stats(
                     "leader-bundle-stats",
                     ("slot", block.context.slot, i64),
                     ("leader", leader.to_string(), String),
-                    ("block_txs", block_signatures.len(), i64),
                     ("num_bundles_sent", num_bundles_sent, i64),
                     ("num_bundles_sent_ok", num_bundles_sent_ok, i64),
                     (
@@ -522,8 +521,10 @@ async fn run_searcher_loop(
             maybe_pending_tx_notification = pending_tx_receiver.recv() => {
                 // block engine starts forwarding a few slots early, for super high activity accounts
                 // it might be ideal to wait until the leader slot is up
-                if is_leader_slot {
+                if !is_leader_slot {
                     let pending_tx_notification = maybe_pending_tx_notification.ok_or(BackrunError::Shutdown)?;
+                    // datapoint_info!("this is the data",("pending_tx_notification", pending_tx_notification.,PendingTxNotification));
+                    println!("this is the data: {:?}", pending_tx_notification);
                     let bundles = build_bundles(pending_tx_notification, &keypair, &blockhash, &tip_accounts, &mut rng, &message);
                     if !bundles.is_empty() {
                         let now = Instant::now();
@@ -553,6 +554,7 @@ async fn run_searcher_loop(
             }
             maybe_slot = slot_receiver.recv() => {
                 highest_slot = maybe_slot.ok_or(BackrunError::Shutdown)?;
+
                 is_leader_slot = leader_schedule.iter().any(|(_, slots)| slots.contains(&highest_slot));
             }
             maybe_block = block_receiver.recv() => {
