@@ -10,8 +10,8 @@ RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian10
 
-COPY --from=build /user/src/app/target/release/jito-backrun-example /usr/local/bin/jito-backrun-example
-COPY --from=build /user/src/app/target/release/searcher-api /usr/local/bin/searcher-api
+COPY --from=build /user/src/app/target/release/jito-backrun-example /usr/local/bin/
+COPY --from=build /user/src/app/target/release/searcher-api /usr/local/bin/
 
 WORKDIR /usr/local/bin
 
