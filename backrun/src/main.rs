@@ -11,7 +11,10 @@ use env_logger::TimestampPrecision;
 use futures::FutureExt;
 use histogram::Histogram;
 use jito_protos::bundle::Bundle;
-use jito_protos::convert::{proto_packet_from_versioned_tx, versioned_tx_from_packet};
+use jito_protos::convert::proto_packet_from_versioned_tx;
+use jito_protos::convert::{
+    packet_to_proto_packet, proto_packet_to_packet, versioned_tx_from_packet,
+};
 use jito_protos::searcher::{
     searcher_service_client::SearcherServiceClient, ConnectedLeadersRequest,
     NextScheduledLeaderRequest, PendingTxNotification, SendBundleRequest, SendBundleResponse,
@@ -31,6 +34,7 @@ use solana_metrics::{datapoint_info, set_host_id};
 use solana_sdk::clock::Slot;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_sdk::hash::Hash;
+use solana_sdk::message::VersionedMessage;
 use solana_sdk::signature::{Signature, Signer};
 use solana_sdk::system_instruction::transfer;
 use solana_sdk::transaction::Transaction;
@@ -431,31 +435,31 @@ async fn print_block_stats(
                     .unwrap_or(0);
                 // block.value.block.unwrap().transactions.unwrap().get(1).unwrap().meta.unwrap().
                 let client = reqwest::Client::new();
-                let body = serde_json::json!({
-                                "min_bundle_send_slot": min_bundle_send_slot,
-                "max_bundle_send_slot": max_bundle_send_slot,
-                "bundles_landed": bundles_landed.len(),
-                "num_bundles_dropped": num_bundles_sent - bundles_landed.len(),
-                "mempool_txs_landed_no_bundle": mempool_txs_landed_no_bundle.len()
-                             });
-                let res = client
-                    .post("http://0.0.0.0:8080/bundle_stats/create")
-                    .header(CONTENT_TYPE, "application/json")
-                    .body(body.to_string())
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<InsertOneResult>()
-                    .await
-                    .unwrap()
-                    .inserted_id
-                    .to_string();
+                // let body = serde_json::json!({
+                //                 "min_bundle_send_slot": min_bundle_send_slot,
+                // "max_bundle_send_slot": max_bundle_send_slot,
+                // "bundles_landed": bundles_landed.len(),
+                // "num_bundles_dropped": num_bundles_sent - bundles_landed.len(),
+                // "mempool_txs_landed_no_bundle": mempool_txs_landed_no_bundle.len()
+                //              });
+                // let res = client
+                //     .post("http://0.0.0.0:8080/bundle_stats/create")
+                //     .header(CONTENT_TYPE, "application/json")
+                //     .body(body.to_string())
+                //     .send()
+                //     .await
+                //     .unwrap()
+                //     .json::<InsertOneResult>()
+                //     .await
+                //     .unwrap()
+                //     .inserted_id
+                //     .to_string();
 
                 datapoint_info!(
                     "leader-bundle-stats",
                     ("slot", block.context.slot, i64),
-                    ("res", res, String),
-                    ("body", body.to_string(), String),
+                    // ("res", res, String),
+                    // ("body", body.to_string(), String),
                     ("leader", leader.to_string(), String),
                     ("num_bundles_sent", num_bundles_sent, i64),
                     ("num_bundles_sent_ok", num_bundles_sent_ok, i64),
@@ -571,8 +575,23 @@ async fn run_searcher_loop(
             maybe_pending_tx_notification = pending_tx_receiver.recv() => {
                 // block engine starts forwarding a few slots early, for super high activity accounts
                 // it might be ideal to wait until the leader slot is up
+
                 if !is_leader_slot {
-                    let pending_tx_notification = maybe_pending_tx_notification.ok_or(BackrunError::Shutdown)?;
+                    let pending_tx_notification = maybe_pending_tx_notification.ok_or(BackrunError::Shutdown).unwrap();
+                    // pending_tx_notification
+                    for ptx in pending_tx_notification.transactions.iter(){
+                        // let pb = proto_packet_to_packet(&ptx);
+                        let tx = versioned_tx_from_packet(&ptx).unwrap();
+
+                        let parsed = match tx.message {
+                            VersionedMessage::V0(versioned_msg) =>  versioned_msg,
+                            VersionedMessage::Legacy(legacy) =>  {continue;}
+                        };
+
+
+                    }
+
+
                     // datapoint_info!("this is the data",("pending_tx_notification", pending_tx_notification.,PendingTxNotification));
                     println!("this is the data: {:?}", pending_tx_notification);
                     let bundles = build_bundles(pending_tx_notification, &keypair, &blockhash, &tip_accounts, &mut rng, &message);
@@ -581,7 +600,7 @@ async fn run_searcher_loop(
                         let results = send_bundles(&mut searcher_client, &bundles).await?;
                         let send_elapsed = now.elapsed().as_micros() as u64;
                         let send_rt_pp_us = send_elapsed / bundles.len() as u64;
-
+                       // call helius api in loop for all bundle txn hashes and store all necessary data in vector and upload to our server
                         match block_stats.entry(highest_slot) {
                             Entry::Occupied(mut entry) => {
                                 let mut stats = entry.get_mut();
@@ -599,6 +618,7 @@ async fn run_searcher_loop(
                                 });
                             }
                         }
+
                     }
                 }
             }
