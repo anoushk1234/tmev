@@ -2,6 +2,7 @@ mod event_loops;
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Debug, format};
 use std::time::Instant;
 use std::{path::Path, result, str::FromStr, sync::Arc, time::Duration};
 
@@ -645,12 +646,26 @@ async fn run_searcher_loop(
                        loop{
                     
                         let url = "https://api.helius.xyz/v0/transactions/?api-key=74edbdf5-7aa8-4cf1-9ea2-c82cece42421&commitment=confirmed";
+                        
+                        let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
+                        let signatures_vec = txs.flat_map(|n| n.signatures.iter());
                         let parsed = serde_json::json!({
-                            "transactions": bundles.iter().map(|b| b.backrun_txs.iter().map(|n| format!("{:?}" n).to_string())).collect::<Vec<String>>(),
+                            "transactions": signatures_vec.map(|s| s.to_string()).collect::<Vec<String>>(),
                         });
                         
+                        let vec: Vec<String> = match parsed {
+                            Value::Array(vec) => vec.into_iter().filter_map(|val| match val {
+                                Value::String(s) => Some(s),
+                                _ => None,
+                            }).collect(),
+                            _ => panic!("Not a valid JSON"),
+                        };
                         let client = reqwest::Client::new();
-                        let resp = client.post(url).json(&parsed).send().await?;
+                        
+                        let resp = vec.into_iter().map(|s| client.post(url).json(&parsed).send().await?);
+                       
+                        
+                        //let respm = ;
 
                        }
                         match block_stats.entry(highest_slot) {
