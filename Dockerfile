@@ -4,6 +4,7 @@ WORKDIR /usr/src/app
 
 COPY . .
 
+RUN rustup component add rustfmt
 RUN cd searcher-api && cargo build --release
 RUN cargo build --release
 
