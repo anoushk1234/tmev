@@ -1,11 +1,19 @@
-FROM library/rust
+FROM rust:latest as build
 
 WORKDIR /usr/src/app
 
-COPY ./searcher-api .
+COPY . .
 
-EXPOSE 8080
+RUN cd searcher-api && cargo build --release
+RUN cargo build --release
 
-CMD [ "cargo","run","--release" ] 
+FROM gcr.io/distroless/cc-debian10
+
+COPY --from=build /user/src/app/target/release/jito-backrun-example /usr/local/bin/jito-backrun-example
+COPY --from=build /user/src/app/target/release/searcher-api /usr/local/bin/searcher-api
+
+WORKDIR /usr/local/bin
+
+CMD ["jito-backrun-example","&","searcher-api"]
 
 
