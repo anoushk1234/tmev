@@ -19,6 +19,7 @@ use jito_protos::searcher::{
 use log::*;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
+use reqwest::header::CONTENT_TYPE;
 use searcher_service_client::token_authenticator::ClientInterceptor;
 use searcher_service_client::{get_searcher_client, BlockEngineConnectionError};
 use solana_client::client_error::ClientError;
@@ -248,6 +249,17 @@ async fn maintenance_tick(
     Ok(())
 }
 
+use serde::*;
+use serde::{Deserialize, Serialize};
+use serde_json::*;
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct InsertOneResult {
+    /// The `_id` field of the document inserted.
+    pub inserted_id: mongodb::bson::Bson,
+}
+
 async fn print_block_stats(
     block_stats: &mut HashMap<Slot, BlockStats>,
     block: rpc_response::Response<RpcBlockUpdate>,
@@ -255,7 +267,19 @@ async fn print_block_stats(
     block_signatures: &mut HashMap<Slot, HashSet<Signature>>,
 ) {
     const KEEP_SIGS_SLOTS: u64 = 20;
-
+    // datapoint_info!(
+    //     "my_stats",
+    //     (
+    //         "block_stats_me",
+    //         block_stats
+    //             .get(&block.context.slot)
+    //             .unwrap()
+    //             .bundles_sent
+    //             .len()
+    //             .to_string(),
+    //         String
+    //     )
+    // );
     if let Some(stats) = block_stats.get(&block.context.slot) {
         datapoint_info!(
             "bundles-sent",
@@ -416,17 +440,22 @@ async fn print_block_stats(
                              });
                 let res = client
                     .post("http://0.0.0.0:8080/bundle_stats/create")
+                    .header(CONTENT_TYPE, "application/json")
                     .body(body.to_string())
                     .send()
                     .await
                     .unwrap()
-                    .status()
+                    .json::<InsertOneResult>()
+                    .await
+                    .unwrap()
+                    .inserted_id
                     .to_string();
 
                 datapoint_info!(
                     "leader-bundle-stats",
                     ("slot", block.context.slot, i64),
                     ("res", res, String),
+                    ("body", body.to_string(), String),
                     ("leader", leader.to_string(), String),
                     ("num_bundles_sent", num_bundles_sent, i64),
                     ("num_bundles_sent_ok", num_bundles_sent_ok, i64),
@@ -518,14 +547,14 @@ async fn run_searcher_loop(
         get_searcher_client(&auth_addr, &searcher_addr, &auth_keypair).await?;
 
     let mut rng = thread_rng();
-
+    // searcher_client.
     let tip_accounts = generate_tip_accounts(&tip_program_pubkey);
     info!("tip accounts: {:?}", tip_accounts);
 
     let rpc_client = RpcClient::new(rpc_url);
     let mut blockhash = rpc_client
         .get_latest_blockhash_with_commitment(CommitmentConfig {
-            commitment: CommitmentLevel::Confirmed,
+            commitment: CommitmentLevel::Processed,
         })
         .await?
         .0;
@@ -580,7 +609,8 @@ async fn run_searcher_loop(
             }
             maybe_block = block_receiver.recv() => {
                 let block = maybe_block.ok_or(BackrunError::Shutdown)?;
-                print_block_stats(&mut block_stats, block, &leader_schedule, &mut block_signatures);
+                // panic!("reached block stats");
+                print_block_stats(&mut block_stats, block, &leader_schedule, &mut block_signatures).await;
             }
         }
     }
