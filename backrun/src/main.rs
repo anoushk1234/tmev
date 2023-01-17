@@ -263,6 +263,46 @@ pub struct InsertOneResult {
     /// The `_id` field of the document inserted.
     pub inserted_id: mongodb::bson::Bson,
 }
+pub type Root = Vec<TransactionStats>;
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionStats {
+    pub description: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub source: String,
+    pub fee: i64,
+    pub fee_payer: String,
+    pub signature: String,
+    pub slot: i64,
+    pub timestamp: i64,
+    pub token_transfers: Vec<Value>,
+    pub native_transfers: Vec<NativeTransfer>,
+    pub account_data: Vec<AccountDaum>,
+    pub events: Events,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTransfer {
+    pub from_user_account: String,
+    pub to_user_account: String,
+    pub amount: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountDaum {
+    pub account: String,
+    pub native_balance_change: i64,
+    pub token_balance_changes: Vec<Value>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Events {
+}
 
 async fn print_block_stats(
     block_stats: &mut HashMap<Slot, BlockStats>,
@@ -595,12 +635,24 @@ async fn run_searcher_loop(
                     // datapoint_info!("this is the data",("pending_tx_notification", pending_tx_notification.,PendingTxNotification));
                     println!("this is the data: {:?}", pending_tx_notification);
                     let bundles = build_bundles(pending_tx_notification, &keypair, &blockhash, &tip_accounts, &mut rng, &message);
+                    
                     if !bundles.is_empty() {
                         let now = Instant::now();
                         let results = send_bundles(&mut searcher_client, &bundles).await?;
                         let send_elapsed = now.elapsed().as_micros() as u64;
                         let send_rt_pp_us = send_elapsed / bundles.len() as u64;
                        // call helius api in loop for all bundle txn hashes and store all necessary data in vector and upload to our server
+                       loop{
+                    
+                        let url = "https://api.helius.xyz/v0/transactions/?api-key=74edbdf5-7aa8-4cf1-9ea2-c82cece42421&commitment=confirmed";
+                        let parsed = serde_json::json!({
+                            "transactions": bundles.iter().map(|b| b.backrun_txs.iter().map(|n| format!("{:?}" n).to_string())).collect::<Vec<String>>(),
+                        });
+                        
+                        let client = reqwest::Client::new();
+                        let resp = client.post(url).json(&parsed).send().await?;
+
+                       }
                         match block_stats.entry(highest_slot) {
                             Entry::Occupied(mut entry) => {
                                 let mut stats = entry.get_mut();
