@@ -2,15 +2,18 @@ mod event_loops;
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, format};
+use std::fmt::{format, Debug};
 use std::time::Instant;
 use std::{path::Path, result, str::FromStr, sync::Arc, time::Duration};
 
-use crate::event_loops::{block_subscribe_loop, pending_tx_loop, slot_subscribe_loop};
+use crate::event_loops::{
+    block_subscribe_loop, bundle_subscribe_loop, pending_tx_loop, slot_subscribe_loop,
+};
 use clap::Parser;
 use env_logger::TimestampPrecision;
 use futures::FutureExt;
 use histogram::Histogram;
+use jito_protos::block_engine::SubscribeBundlesResponse;
 use jito_protos::bundle::Bundle;
 use jito_protos::convert::proto_packet_from_versioned_tx;
 use jito_protos::convert::{
@@ -25,7 +28,9 @@ use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 use reqwest::header::CONTENT_TYPE;
 use searcher_service_client::token_authenticator::ClientInterceptor;
-use searcher_service_client::{get_searcher_client, BlockEngineConnectionError};
+use searcher_service_client::{
+    get_block_engine_validator_client, get_searcher_client, BlockEngineConnectionError,
+};
 use solana_client::client_error::ClientError;
 use solana_client::nonblocking::pubsub_client::PubsubClientError;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -52,7 +57,7 @@ use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use tonic::{Response, Status};
 
-use reqwest;
+use reqwest::{self, StatusCode};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -302,8 +307,7 @@ pub struct AccountDaum {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Events {
-}
+pub struct Events {}
 
 async fn print_block_stats(
     block_stats: &mut HashMap<Slot, BlockStats>,
@@ -583,6 +587,7 @@ async fn run_searcher_loop(
     mut slot_receiver: Receiver<Slot>,
     mut block_receiver: Receiver<rpc_response::Response<RpcBlockUpdate>>,
     mut pending_tx_receiver: Receiver<PendingTxNotification>,
+    mut bundle_tx_receiver: Receiver<SubscribeBundlesResponse>,
 ) -> Result<()> {
     let mut leader_schedule: HashMap<Pubkey, HashSet<Slot>> = HashMap::new();
     let mut block_stats: HashMap<Slot, BlockStats> = HashMap::new();
@@ -590,6 +595,8 @@ async fn run_searcher_loop(
 
     let mut searcher_client =
         get_searcher_client(&auth_addr, &searcher_addr, &auth_keypair).await?;
+    let mut block_client =
+        get_block_engine_validator_client(&auth_addr, &searcher_addr, &auth_keypair).await?;
 
     let mut rng = thread_rng();
     // searcher_client.
@@ -608,66 +615,104 @@ async fn run_searcher_loop(
     let mut is_leader_slot = false;
 
     let mut tick = interval(Duration::from_secs(5));
+
     loop {
         tokio::select! {
             _ = tick.tick() => {
                 maintenance_tick(&mut searcher_client, &rpc_client, &mut leader_schedule, &mut blockhash).await?;
-            }
+            },
+            maybe_bundle_subscribe_response = bundle_tx_receiver.recv()=>{
+                println!("Bundles incoming!: {:?}", maybe_bundle_subscribe_response);
+            },
             maybe_pending_tx_notification = pending_tx_receiver.recv() => {
                 // block engine starts forwarding a few slots early, for super high activity accounts
                 // it might be ideal to wait until the leader slot is up
+                // panic!("outside");
+                if is_leader_slot {
 
-                if !is_leader_slot {
                     let pending_tx_notification = maybe_pending_tx_notification.ok_or(BackrunError::Shutdown).unwrap();
                     // pending_tx_notification
-                    for ptx in pending_tx_notification.transactions.iter(){
-                        // let pb = proto_packet_to_packet(&ptx);
-                        let tx = versioned_tx_from_packet(&ptx).unwrap();
+                    // for ptx in pending_tx_notification.transactions.iter(){
+                    //     // let pb = proto_packet_to_packet(&ptx);
+                    //     let tx = versioned_tx_from_packet(&ptx).unwrap();
 
-                        let parsed = match tx.message {
-                            VersionedMessage::V0(versioned_msg) =>  versioned_msg,
-                            VersionedMessage::Legacy(legacy) =>  {continue;}
-                        };
-
-
-                    }
+                    //     let parsed = match tx.message {
+                    //         VersionedMessage::V0(versioned_msg) =>  versioned_msg,
+                    //         VersionedMessage::Legacy(legacy) =>  {continue;}
+                    //     };
 
 
+                    // }
+
+                    // panic!("this is the data");
                     // datapoint_info!("this is the data",("pending_tx_notification", pending_tx_notification.,PendingTxNotification));
-                    println!("this is the data: {:?}", pending_tx_notification);
+                    println!("pending tx notif: {:?}", pending_tx_notification);
                     let bundles = build_bundles(pending_tx_notification, &keypair, &blockhash, &tip_accounts, &mut rng, &message);
-                    
+
                     if !bundles.is_empty() {
                         let now = Instant::now();
+
                         let results = send_bundles(&mut searcher_client, &bundles).await?;
                         let send_elapsed = now.elapsed().as_micros() as u64;
                         let send_rt_pp_us = send_elapsed / bundles.len() as u64;
                        // call helius api in loop for all bundle txn hashes and store all necessary data in vector and upload to our server
-                       loop{
-                    
-                        let url = "https://api.helius.xyz/v0/transactions/?api-key=74edbdf5-7aa8-4cf1-9ea2-c82cece42421&commitment=confirmed";
-                        
-                        let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
-                        let signatures_vec = txs.flat_map(|n| n.signatures.iter());
-                        let parsed = serde_json::json!({
-                            "transactions": signatures_vec.map(|s| s.to_string()).collect::<Vec<String>>(),
-                        });
-                        
-                        let vec: Vec<String> = match parsed {
-                            Value::Array(vec) => vec.into_iter().filter_map(|val| match val {
-                                Value::String(s) => Some(s),
-                                _ => None,
-                            }).collect(),
-                            _ => panic!("Not a valid JSON"),
-                        };
-                        let client = reqwest::Client::new();
-                        
-                        let resp = vec.into_iter().map(|s| client.post(url).json(&parsed).send().await?);
-                       
-                        
-                        //let respm = ;
 
-                       }
+
+                    //     let url = "https://api.helius.xyz/v0/transactions/?api-key=74edbdf5-7aa8-4cf1-9ea2-c82cece42421&commitment=confirmed";
+
+                        let singled_bundles = bundles.iter().map( |b|  {
+                            let BundledTransactions {
+                                mempool_txs,
+                                backrun_txs
+                            } = b;
+                            let sig1: Vec<String> = mempool_txs.into_iter().map(|s1| s1.signatures.get(0).unwrap().to_string()).collect();
+                            let sig2: Vec<String> = backrun_txs.into_iter().map(|s2| s2.signatures.get(0).unwrap().to_string()).collect();
+
+                            // let m1 = mempool_txs.get(0).unwrap().message.clone();
+                            // match m1 {
+                            //     VersionedMessage::V0(v0) =>{ println!("v0 msg ✅: {:?}",v0);},
+                            //     VersionedMessage::Legacy(legacy)=>{println!("legacy msg 🔥: {:?}",legacy);}
+                            // }
+
+                            return sig1.into_iter().chain(sig2.into_iter()).collect::<Vec<String>>()
+                        }).collect::<Vec<Vec<String>>>();
+                    //     // let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
+                    //     // let signatures_vec = txs.flat_map(|n| n.signatures.iter());
+                    //    tokio::spawn(async move{
+                    //     for bundle in &singled_bundles.iter().as_slice()[0..1]{
+                    //         let json_parsed_request = serde_json::json!({
+                    //             "transactions": bundle
+                    //         });
+                    //         let client = reqwest::Client::new();
+                    //         let response = client.post(url).json(&json_parsed_request).send().await.unwrap();
+
+                    //         match response.status().as_u16() {
+                    //             200 => {
+                    //                 datapoint_info!("log out",("response",response.text().await.unwrap().to_string(),String));
+                    //                 continue;
+                    //             },
+                    //             _=>{datapoint_info!("error",("response",response.status().as_u16().to_string(), String))}
+                    //         }
+                    //        }
+                    //    });
+
+                        // let parsed_bundles: Vec<String> = match parsed {
+                        //     Value::Array(vec) => vec.into_iter().filter_map(|val| match val {
+                        //         Value::String(s) => Some(s),
+                        //         _ => None,
+                        //     }).collect(),
+                        //     _ => panic!("Not a valid JSON"),
+                        // };
+
+
+                        // let resp = parsed_bundles.into_iter().map(|s| {
+                        //     let client = reqwest::Client::new();
+                        //    return client.post(url).json(&s).send();
+
+                        // });
+                        // let s = futures::future::try_join_all(resp).await.unwrap();
+
+
                         match block_stats.entry(highest_slot) {
                             Entry::Occupied(mut entry) => {
                                 let mut stats = entry.get_mut();
@@ -722,6 +767,7 @@ fn main() -> Result<()> {
         .iter()
         .map(|a| Pubkey::from_str(a).unwrap())
         .collect();
+
     let tip_program_pubkey = Pubkey::from_str(&args.tip_program_id).unwrap();
 
     let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
@@ -729,7 +775,7 @@ fn main() -> Result<()> {
         let (slot_sender, slot_receiver) = channel(100);
         let (block_sender, block_receiver) = channel(100);
         let (pending_tx_sender, pending_tx_receiver) = channel(100);
-
+        let (bundle_tx_sender, bundle_tx_receiver) = channel(1000);
         tokio::spawn(slot_subscribe_loop(args.pubsub_url.clone(), slot_sender));
         tokio::spawn(block_subscribe_loop(args.pubsub_url.clone(), block_sender));
         tokio::spawn(pending_tx_loop(
@@ -739,6 +785,12 @@ fn main() -> Result<()> {
             pending_tx_sender,
             backrun_pubkeys,
         ));
+        // tokio::spawn(bundle_subscribe_loop(
+        //     args.auth_addr.clone(),
+        //     args.searcher_addr.clone(),
+        //     auth_keypair.clone(),
+        //     bundle_tx_sender,
+        // ));
 
         let result = run_searcher_loop(
             args.auth_addr,
@@ -751,6 +803,7 @@ fn main() -> Result<()> {
             slot_receiver,
             block_receiver,
             pending_tx_receiver,
+            bundle_tx_receiver,
         )
         .await;
         error!("searcher loop exited result: {:?}", result);

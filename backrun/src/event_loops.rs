@@ -1,7 +1,8 @@
 use futures_util::StreamExt;
+use jito_protos::block_engine::{SubscribeBundlesRequest, SubscribeBundlesResponse};
 use jito_protos::searcher::{PendingTxNotification, PendingTxSubscriptionRequest};
 use log::info;
-use searcher_service_client::get_searcher_client;
+use searcher_service_client::{get_block_engine_validator_client, get_searcher_client};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::rpc_config::{RpcBlockSubscribeConfig, RpcBlockSubscribeFilter};
 use solana_client::rpc_response;
@@ -205,6 +206,75 @@ pub async fn pending_tx_loop(
                     }
                 }
             }
+            Err(e) => {
+                num_searcher_connection_errors += 1;
+                datapoint_error!(
+                    "searcher_connection_error",
+                    ("errors", num_searcher_connection_errors, i64),
+                    ("error_str", e.to_string(), String)
+                );
+            }
+        }
+    }
+}
+
+pub async fn bundle_subscribe_loop(
+    auth_addr: String,
+    searcher_addr: String,
+    auth_keypair: Arc<Keypair>,
+    bundle_tx_sender: Sender<SubscribeBundlesResponse>,
+) {
+    let mut num_searcher_connection_errors: usize = 0;
+    let mut num_pending_tx_sub_errors: usize = 0;
+    let mut num_pending_tx_stream_errors: usize = 0;
+    let mut num_pending_tx_stream_disconnects: usize = 0;
+
+    // info!("backrun pubkeys: {:?}", backrun_pubkeys);
+
+    loop {
+        sleep(Duration::from_secs(1)).await;
+
+        match get_block_engine_validator_client(&auth_addr, &searcher_addr, &auth_keypair).await {
+            Ok(mut searcher_client) => match searcher_client
+                .subscribe_bundles(SubscribeBundlesRequest {})
+                .await
+            {
+                Ok(pending_tx_stream_response) => {
+                    let mut pending_tx_stream = pending_tx_stream_response.into_inner();
+                    while let Some(maybe_notification) = pending_tx_stream.next().await {
+                        match maybe_notification {
+                            Ok(notification) => {
+                                if bundle_tx_sender.send(notification).await.is_err() {
+                                    datapoint_error!("bundle_tx_sender", ("errors", 1, i64));
+                                    return;
+                                }
+                            }
+                            Err(e) => {
+                                num_pending_tx_stream_errors += 1;
+                                datapoint_error!(
+                                    "searcher_bundle_tx_stream_error",
+                                    ("errors", num_pending_tx_stream_errors, i64),
+                                    ("error_str", e.to_string(), String)
+                                );
+                                break;
+                            }
+                        }
+                    }
+                    num_pending_tx_stream_disconnects += 1;
+                    datapoint_error!(
+                        "searcher_bundle_tx_stream_disconnect",
+                        ("errors", num_pending_tx_stream_disconnects, i64),
+                    );
+                }
+                Err(e) => {
+                    num_pending_tx_sub_errors += 1;
+                    datapoint_error!(
+                        "searcher_bundle_tx_sub_error",
+                        ("errors", num_pending_tx_sub_errors, i64),
+                        ("error_str", e.to_string(), String)
+                    );
+                }
+            },
             Err(e) => {
                 num_searcher_connection_errors += 1;
                 datapoint_error!(

@@ -1,6 +1,7 @@
 use crate::token_authenticator::ClientInterceptor;
 use jito_protos::auth::auth_service_client::AuthServiceClient;
 use jito_protos::auth::Role;
+use jito_protos::block_engine::block_engine_validator_client::{self, BlockEngineValidatorClient};
 use jito_protos::searcher::searcher_service_client::SearcherServiceClient;
 use solana_sdk::signature::Keypair;
 use std::sync::Arc;
@@ -40,6 +41,27 @@ pub async fn get_searcher_client(
     let searcher_client =
         SearcherServiceClient::with_interceptor(searcher_channel, client_interceptor);
     Ok(searcher_client)
+}
+
+pub async fn get_block_engine_validator_client(
+    auth_addr: &str,
+    searcher_addr: &str,
+    auth_keypair: &Arc<Keypair>,
+) -> BlockEngineConnectionResult<
+    BlockEngineValidatorClient<InterceptedService<Channel, ClientInterceptor>>,
+> {
+    let auth_channel = create_grpc_channel(auth_addr).await?;
+    let client_interceptor = ClientInterceptor::new(
+        AuthServiceClient::new(auth_channel),
+        &auth_keypair,
+        Role::Searcher,
+    )
+    .await?;
+
+    let block_channel = create_grpc_channel(searcher_addr).await?;
+    let block_client =
+        BlockEngineValidatorClient::with_interceptor(block_channel, client_interceptor);
+    Ok(block_client)
 }
 
 pub async fn create_grpc_channel(url: &str) -> BlockEngineConnectionResult<Channel> {
