@@ -26,9 +26,10 @@ async fn main() -> std::io::Result<()> {
             .service(create_bundle_stats)
             .service(get_all_bundle_stats)
             .app_data(new_db_data.clone())
-            .service(create_bundled_transactions)
+            .service(create_bundled_transaction)
             .service(get_all_bundle_transactions)
             .service(get_bundled_transaction_by_searcher)
+            .service(create_bundled_transactions)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

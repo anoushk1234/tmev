@@ -7,7 +7,7 @@ use actix_web::{
 use serde::Deserialize;
 
 #[post("/btxn/create")]
-pub async fn create_bundled_transactions(
+pub async fn create_bundled_transaction(
     db: Data<BundledTransactionRepo>,
     new_bundle: Json<BundledTransaction>,
 ) -> HttpResponse {
@@ -46,6 +46,25 @@ async fn get_bundled_transaction_by_searcher(
     let btxn = db.get_bundled_transactions_by_searcher(&searcher).await;
     match btxn {
         Ok(btxn_bundle) => HttpResponse::Ok().json(btxn_bundle),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+#[post("/btxn/create_many")]
+async fn create_bundled_transactions(
+    db: Data<BundledTransactionRepo>,
+    new_bundle_txns: Json<Vec<BundledTransaction>>,
+) -> HttpResponse {
+    let data = new_bundle_txns
+        .iter()
+        .map(|f| BundledTransaction {
+            id: None,
+            ..f.clone()
+        })
+        .collect::<Vec<BundledTransaction>>();
+    let btxns = db.create_bundled_transactions_in_db(data).await;
+    match btxns {
+        Ok(res) => HttpResponse::Ok().json(res),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
 }

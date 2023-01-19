@@ -8,7 +8,7 @@ use log::info;
 use crate::models::BundledTransaction;
 use mongodb::{
     bson::{doc, extjson::de::Error, oid::ObjectId},
-    results::InsertOneResult,
+    results::{InsertManyResult, InsertOneResult},
     Client, Collection, Cursor,
 };
 // use env_logger::
@@ -46,20 +46,41 @@ impl BundledTransactionRepo {
             .expect("Error creating bundle in db");
         Ok(bundled_txn)
     }
+    pub async fn create_bundled_transactions_in_db(
+        &self,
+        mut new_bundle_txns: Vec<BundledTransaction>,
+    ) -> Result<InsertManyResult, Error> {
+        let new_docs = new_bundle_txns
+            .iter_mut()
+            .map(move |f| BundledTransaction {
+                id: None,
+                ..f.clone()
+            })
+            .collect::<Vec<BundledTransaction>>();
+        let bundled_txn = self
+            .col
+            .insert_many(new_docs, None)
+            .await
+            .ok()
+            .expect("Error creating bundled txn in db");
+        Ok(bundled_txn)
+    }
     pub async fn get_bundled_transactions_from_db(&self) -> Result<Vec<BundledTransaction>, Error> {
         let mut cursors = self
             .col
             .find(None, None)
             .await
             .ok()
-            .expect("Error getting list of users");
+            .expect("Error getting list of btxns");
         let mut bundle_txns: Vec<BundledTransaction> = Vec::new();
+        // println!("here {:?}", cursors.try_next().await);
         while let Some(txn) = cursors
             .try_next()
             .await
             .ok()
             .expect("Error mapping through cursor")
         {
+            println!("here: {:?}", txn);
             bundle_txns.push(txn)
         }
         Ok(bundle_txns)

@@ -575,7 +575,12 @@ async fn print_block_stats(
     // throw away signatures for slots > KEEP_SIGS_SLOTS old
     block_signatures.retain(|slot, _| *slot > block.context.slot - KEEP_SIGS_SLOTS);
 }
-
+#[derive(Serialize, Deserialize)]
+pub struct ParsedBundleTransaction {
+    pub searcher_key: String,
+    pub bundle_id: String,
+    pub transaction_hash: String,
+}
 async fn run_searcher_loop(
     auth_addr: String,
     searcher_addr: String,
@@ -664,7 +669,7 @@ async fn run_searcher_loop(
                             let BundledTransactions {
                                 mempool_txs,
                                 backrun_txs
-                            } = b;
+                                        } = b;
                             let sig1: Vec<String> = mempool_txs.into_iter().map(|s1| s1.signatures.get(0).unwrap().to_string()).collect();
                             let sig2: Vec<String> = backrun_txs.into_iter().map(|s2| s2.signatures.get(0).unwrap().to_string()).collect();
 
@@ -676,25 +681,41 @@ async fn run_searcher_loop(
 
                             return sig1.into_iter().chain(sig2.into_iter()).collect::<Vec<String>>()
                         }).collect::<Vec<Vec<String>>>();
-                    //     // let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
-                    //     // let signatures_vec = txs.flat_map(|n| n.signatures.iter());
-                    //    tokio::spawn(async move{
-                    //     for bundle in &singled_bundles.iter().as_slice()[0..1]{
-                    //         let json_parsed_request = serde_json::json!({
-                    //             "transactions": bundle
-                    //         });
-                    //         let client = reqwest::Client::new();
-                    //         let response = client.post(url).json(&json_parsed_request).send().await.unwrap();
+                        let parsed_bundles = singled_bundles.iter().enumerate().map(|(i, x)| {
+                            let uuid: &SendBundleResponse = results.get(i).unwrap().as_ref().unwrap().get_ref().into();
 
-                    //         match response.status().as_u16() {
-                    //             200 => {
-                    //                 datapoint_info!("log out",("response",response.text().await.unwrap().to_string(),String));
-                    //                 continue;
-                    //             },
-                    //             _=>{datapoint_info!("error",("response",response.status().as_u16().to_string(), String))}
-                    //         }
-                    //        }
-                    //    });
+
+                         let parsed_bundle_txn: Vec<ParsedBundleTransaction> =  x.iter().map(|t|  ParsedBundleTransaction{
+                            bundle_id: uuid.uuid.clone(),
+                            searcher_key: auth_keypair.as_ref().pubkey().to_string(),
+                            transaction_hash: t.to_string()
+                        }).collect();
+                        parsed_bundle_txn
+                        } ) // (index, vec of txn sigs per bundle, uuid for the bundle )
+                        .collect::<Vec<Vec<ParsedBundleTransaction>>>();
+                        let url = "http://0.0.0.0:8080/btxn/create_many";
+
+                        // let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
+                        // let signatures_vec = txs.flat_map(|n| n.signatures.iter());
+                       tokio::spawn(async move{
+                        for bundle in parsed_bundles.iter(){
+                            let json_parsed_request = serde_json::json!([{
+                                "searcher_key": bundle.iter().map(|s| s.searcher_key.clone()).collect::<String>(),
+                                "bundle_id": bundle.iter().map(|b| b.bundle_id.clone()).collect::<String>(),
+                                "transaction_hash":bundle.iter().map(|t| t.transaction_hash.clone()).collect::<String>(),
+                            }]);
+                            let client = reqwest::Client::new();
+                            let response = client.post(url).json(&json_parsed_request).send().await.unwrap();
+
+                            match response.status().as_u16() {
+                                200 => {
+                                    datapoint_info!("log out",("response",response.text().await.unwrap().to_string(),String));
+                                    continue;
+                                },
+                                _=>{datapoint_info!("error",("response",response.status().as_u16().to_string(), String))}
+                            }
+                           }
+                       });
 
                         // let parsed_bundles: Vec<String> = match parsed {
                         //     Value::Array(vec) => vec.into_iter().filter_map(|val| match val {
