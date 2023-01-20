@@ -12,8 +12,20 @@ dotenv = "0.15.0"
 futures = "0.3"
 env_logger = "0.10.0"
 log = "0.4.6"
-
+prost = "0.6.1"
+tonic = {version="0.8.3",features = ["tls"]}
+tokio = {version="0.2.18",features = ["full"]}
+solana-sdk = "=1.11.2"
+solana-client = "=1.11.2"
+solana-metrics = "=1.11.2"
+solana-transaction-status = "=1.11.2"
+thiserror = "1.0.38"
 [dependencies.mongodb]
 version = "2.2.0"
 default-features = false
 features = ["async-std-runtime"] 
+
+ 
+
+[build-dependencies]
+tonic-build = "0.8.4"

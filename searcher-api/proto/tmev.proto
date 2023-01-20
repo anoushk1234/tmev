@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package tmev;
+
+service BundleService{
+    rpc SubscribeBundles (SubscribeBundlesRequest) returns (stream SubscribeBundlesResponse) {}
+}
+
+message SubscribeBundlesRequest {
+    string searcher_key = 1;
+}
+
+message SubscribeBundlesResponse {
+    Bundle bundle = 1;
+}
+
+message Bundle {
+    string uuid = 1;
+    string transaction_hash = 2;
+    string searcher_key = 3;
+}
