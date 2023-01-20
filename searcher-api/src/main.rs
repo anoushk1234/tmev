@@ -11,7 +11,9 @@ use tokio::sync::mpsc::{self, channel, Receiver};
 use tonic::{transport::Server, Request, Response, Status};
 
 use tmev_protos::bundle_service_server::{BundleService, BundleServiceServer};
-use tmev_protos::{SubscribeBundlesRequest, SubscribeBundlesResponse};
+use tmev_protos::{Bundle, SubscribeBundlesRequest, SubscribeBundlesResponse};
+
+const TIP_PROGRAM_KEY: &'static str = "T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt";
 // mod tmev;
 #[derive(Default)]
 pub struct MevBundleClient {}
@@ -26,14 +28,23 @@ impl BundleService for MevBundleClient {
         // creating a queue or channel
         let (mut tx, rx) = channel(4);
         // creating a new task
+        println!("works fine till here");
         tokio::spawn(async move {
             // looping and sending our response using stream
             for _ in 0..4 {
                 // sending response to our channel
-                tx.send(Ok(SubscribeBundlesResponse { bundle: None })).await;
+                tx.send(Ok(SubscribeBundlesResponse {
+                    bundle: Some(Bundle {
+                        uuid: format!("hello"),
+                        transaction_hash: format!("hello"),
+                        searcher_key: format!("hello"),
+                    }),
+                }))
+                .await
+                .unwrap();
             }
         });
-        // returning our reciever so that tonic can listen on reciever and send the response to client
+        // returning our reciever so that tonic can listen on receiver and send the response to client
         Ok(Response::new(rx))
     }
 }
@@ -52,24 +63,41 @@ async fn main() -> std::io::Result<()> {
     let db_data = Data::new(db);
     let new_db = BundledTransactionRepo::init().await;
     let new_db_data = Data::new(new_db);
-    let (block_sender, block_receiver) = channel(100);
+    let (block_sender, mut block_receiver) = channel(100);
     let (slot_sender, slot_receiver) = channel(100);
-    //
-    tokio::spawn(async move {
+    println!("before");
+    actix_web::rt::spawn(async move {
         let rpc_url = env::var("RPC_URL").unwrap();
         block_subscribe_loop(rpc_url, block_sender);
 
         let resp = block_receiver.recv().await.unwrap().value.block.unwrap();
 
-        // match resp {}
+        // for tx in resp.transactions.unwrap(){
+        //     match tx.transaction{
+        //         EncodedTransaction::Json(inner_tx) => {
+        //             match inner_tx.message{
+        //                 UiMessage::Raw(message) => {
+        //                     let acc_keys = message.account_keys.clone().into_iter().map(|k | k.pubkey).collect::<Vec<Pubkey>>();
+
+        //                     if acc_keys.contains(&TIP_PROGRAM_KEY.to_string()){
+
+        //                      }
+        //                 },
+        //                 _ => ()
+        //             },
+        //         },
+        //         _ => ()
+        //     }
+
+        // }
     });
-    //
-    tokio::spawn(async move {
+    println!("after");
+    actix_web::rt::spawn(async move {
         let rpc_url = env::var("RPC_URL").unwrap();
         slot_subscribe_loop(rpc_url, slot_sender);
     });
 
-    tokio::spawn(async move {
+    actix_web::rt::spawn(async move {
         let addr = "0.0.0.0:5005".parse().unwrap();
         let mev_client = MevBundleClient::default();
         println!("Server listening on {}", addr);
@@ -96,6 +124,7 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
+use actix_web::rt::time::delay_for;
 use futures::StreamExt;
 use solana_client::client_error::ClientError;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
@@ -106,11 +135,12 @@ use solana_client::rpc_response::{RpcBlockUpdate, SlotUpdate};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::clock::Slot;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
+use solana_transaction_status::{
+    EncodedTransaction, TransactionDetails, UiMessage, UiTransactionEncoding,
+};
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
-use tokio::time::delay_for;
-
+// use tokio::time::delay_for;
 pub async fn block_subscribe_loop(
     pubsub_addr: String,
     mut block_receiver: Sender<rpc_response::Response<RpcBlockUpdate>>,

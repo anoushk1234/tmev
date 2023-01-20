@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
  [dependencies]
-actix-web = "4"
+actix-web = "3"
 serde = "1.0.136"
 dotenv = "0.15.0"
 futures = "0.3"
 env_logger = "0.10.0"
 log = "0.4.6"
 prost = "0.6.1"
-tonic = {version="0.8.3",features = ["tls"]}
-tokio = {version="0.2.18",features = ["full"]}
+tonic = {version="0.2.0",features = ["tls"]}
+tokio = {version="0.2",features = ["full"]}
 solana-sdk = "=1.11.2"
 solana-client = "=1.11.2"
 solana-metrics = "=1.11.2"
