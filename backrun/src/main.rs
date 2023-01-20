@@ -259,7 +259,6 @@ async fn maintenance_tick(
     Ok(())
 }
 
-use serde::*;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 #[derive(Debug, Deserialize, Serialize)]
@@ -478,8 +477,8 @@ async fn print_block_stats(
                     .map(|(slot, _)| **slot)
                     .max()
                     .unwrap_or(0);
-                // block.value.block.unwrap().transactions.unwrap().get(1).unwrap().meta.unwrap().
-                let client = reqwest::Client::new();
+
+                // let client = reqwest::Client::new();
                 // let body = serde_json::json!({
                 //                 "min_bundle_send_slot": min_bundle_send_slot,
                 // "max_bundle_send_slot": max_bundle_send_slot,
@@ -604,7 +603,6 @@ async fn run_searcher_loop(
         get_block_engine_validator_client(&auth_addr, &searcher_addr, &auth_keypair).await?;
 
     let mut rng = thread_rng();
-    // searcher_client.
     let tip_accounts = generate_tip_accounts(&tip_program_pubkey);
     info!("tip accounts: {:?}", tip_accounts);
 
@@ -627,12 +625,12 @@ async fn run_searcher_loop(
                 maintenance_tick(&mut searcher_client, &rpc_client, &mut leader_schedule, &mut blockhash).await?;
             },
             maybe_bundle_subscribe_response = bundle_tx_receiver.recv()=>{
-                println!("Bundles incoming!: {:?}", maybe_bundle_subscribe_response);
+                println!("Bundles : {:?}", maybe_bundle_subscribe_response); // It's not possible to listen to bundles unless your a validator hence we disabled this
             },
             maybe_pending_tx_notification = pending_tx_receiver.recv() => {
                 // block engine starts forwarding a few slots early, for super high activity accounts
                 // it might be ideal to wait until the leader slot is up
-                // panic!("outside");
+
                 if is_leader_slot {
 
                     let pending_tx_notification = maybe_pending_tx_notification.ok_or(BackrunError::Shutdown).unwrap();
@@ -660,10 +658,7 @@ async fn run_searcher_loop(
                         let results = send_bundles(&mut searcher_client, &bundles).await?;
                         let send_elapsed = now.elapsed().as_micros() as u64;
                         let send_rt_pp_us = send_elapsed / bundles.len() as u64;
-                       // call helius api in loop for all bundle txn hashes and store all necessary data in vector and upload to our server
 
-
-                    //     let url = "https://api.helius.xyz/v0/transactions/?api-key=74edbdf5-7aa8-4cf1-9ea2-c82cece42421&commitment=confirmed";
 
                         let singled_bundles = bundles.iter().map( |b|  {
                             let BundledTransactions {
@@ -695,15 +690,10 @@ async fn run_searcher_loop(
                         .collect::<Vec<Vec<ParsedBundleTransaction>>>();
                         let url = "http://0.0.0.0:8080/btxn/create_many";
 
-                        // let txs = bundles.iter().flat_map(|b| b.backrun_txs.iter());
-                        // let signatures_vec = txs.flat_map(|n| n.signatures.iter());
                        tokio::spawn(async move{
                         for bundle in parsed_bundles.iter(){
-                            let json_parsed_request = serde_json::json!([{
-                                "searcher_key": bundle.iter().map(|s| s.searcher_key.clone()).collect::<String>(),
-                                "bundle_id": bundle.iter().map(|b| b.bundle_id.clone()).collect::<String>(),
-                                "transaction_hash":bundle.iter().map(|t| t.transaction_hash.clone()).collect::<String>(),
-                            }]);
+
+                            let json_parsed_request = serde_json::json!(bundle);
                             let client = reqwest::Client::new();
                             let response = client.post(url).json(&json_parsed_request).send().await.unwrap();
 
@@ -712,26 +702,10 @@ async fn run_searcher_loop(
                                     datapoint_info!("log out",("response",response.text().await.unwrap().to_string(),String));
                                     continue;
                                 },
-                                _=>{datapoint_info!("error",("response",response.status().as_u16().to_string(), String))}
+                                _ => {datapoint_info!("error",("response",response.status().as_u16().to_string(), String))}
                             }
                            }
                        });
-
-                        // let parsed_bundles: Vec<String> = match parsed {
-                        //     Value::Array(vec) => vec.into_iter().filter_map(|val| match val {
-                        //         Value::String(s) => Some(s),
-                        //         _ => None,
-                        //     }).collect(),
-                        //     _ => panic!("Not a valid JSON"),
-                        // };
-
-
-                        // let resp = parsed_bundles.into_iter().map(|s| {
-                        //     let client = reqwest::Client::new();
-                        //    return client.post(url).json(&s).send();
-
-                        // });
-                        // let s = futures::future::try_join_all(resp).await.unwrap();
 
 
                         match block_stats.entry(highest_slot) {
@@ -762,7 +736,7 @@ async fn run_searcher_loop(
             }
             maybe_block = block_receiver.recv() => {
                 let block = maybe_block.ok_or(BackrunError::Shutdown)?;
-                // panic!("reached block stats");
+
                 print_block_stats(&mut block_stats, block, &leader_schedule, &mut block_signatures).await;
             }
         }
