@@ -3,7 +3,9 @@ members = [
     "backrun",
     "jito_protos",
     "searcher_service_client",
-    "searcher-api"
+    "searcher-api",
+    "tmev-cli",
+    "tmev-protos"
 ]
 
-# exclude=["searcher-api"]
+# exclude=["tmev-cli"]

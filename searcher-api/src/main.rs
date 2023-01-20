@@ -10,9 +10,9 @@ use tokio::sync::mpsc::{self, channel, Receiver};
 
 use tonic::{transport::Server, Request, Response, Status};
 
-use tmev::bundle_service_server::{BundleService, BundleServiceServer};
-use tmev::{SubscribeBundlesRequest, SubscribeBundlesResponse};
-mod tmev;
+use tmev_protos::bundle_service_server::{BundleService, BundleServiceServer};
+use tmev_protos::{SubscribeBundlesRequest, SubscribeBundlesResponse};
+// mod tmev;
 #[derive(Default)]
 pub struct MevBundleClient {}
 
@@ -59,10 +59,9 @@ async fn main() -> std::io::Result<()> {
         let rpc_url = env::var("RPC_URL").unwrap();
         block_subscribe_loop(rpc_url, block_sender);
 
-        // let resp = block_receiver
-        //     .recv()
-        //     .await
-        //     .unwrap_or_else(BundleSubscribeError::Shutdown);
+        let resp = block_receiver.recv().await.unwrap().value.block.unwrap();
+
+        // match resp {}
     });
     //
     tokio::spawn(async move {
@@ -71,14 +70,15 @@ async fn main() -> std::io::Result<()> {
     });
 
     tokio::spawn(async move {
-        let addr = "[::1]:50051".parse().unwrap();
-        let say = MevBundleClient::default();
+        let addr = "0.0.0.0:5005".parse().unwrap();
+        let mev_client = MevBundleClient::default();
         println!("Server listening on {}", addr);
         Server::builder()
-            .add_service(BundleServiceServer::new(say))
+            .add_service(BundleServiceServer::new(mev_client))
             .serve(addr)
-            .await?;
-        Ok(())
+            .await
+            .ok()
+            .expect("Error Starting Server");
     });
     HttpServer::new(move || {
         App::new()

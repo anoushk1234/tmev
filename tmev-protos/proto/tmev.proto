@@ -3,7 +3,7 @@ syntax = "proto3";
 package tmev;
 
 service BundleService{
-    rpc SubscribeBundles (SubscribeBundlesRequest) returns (stream SubscribeBundlesResponse) {}
+    rpc SubscribeBundles (SubscribeBundlesRequest) returns (stream SubscribeBundlesResponse);
 }
 
 message SubscribeBundlesRequest {

@@ -20,6 +20,7 @@ solana-client = "=1.11.2"
 solana-metrics = "=1.11.2"
 solana-transaction-status = "=1.11.2"
 thiserror = "1.0.38"
+tmev-protos = {path="../tmev-protos"}
 [dependencies.mongodb]
 version = "2.2.0"
 default-features = false
