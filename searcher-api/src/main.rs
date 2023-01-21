@@ -259,11 +259,11 @@ async fn main() {
     println!("before");
     println!("after");
     dotenv().ok();
-    tokio::spawn(async move {
-        let rpc_url = std::env::var("RPC_URL").expect("cant read env");
-        // println!("here: {:?}", rpc_url);
-        // slot_subscribe_loop(rpc_url.unwrap(), slot_sender);
-    });
+    // tokio::spawn(async move {
+    //     let rpc_url = std::env::var("RPC_URL").expect("cant read env");
+    //     // println!("here: {:?}", rpc_url);
+    //     // slot_subscribe_loop(rpc_url.unwrap(), slot_sender);
+    // });
 
     // tokio::spawn(async move {
 
