@@ -4,3 +4,4 @@
 [submodule "tmev-cli"]
 	path = tmev-cli
 	url = https://github.com/anoushk1234/tmev-cli.git
+	branch=main

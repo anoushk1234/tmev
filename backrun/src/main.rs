@@ -624,9 +624,9 @@ async fn run_searcher_loop(
             _ = tick.tick() => {
                 maintenance_tick(&mut searcher_client, &rpc_client, &mut leader_schedule, &mut blockhash).await?;
             },
-            maybe_bundle_subscribe_response = bundle_tx_receiver.recv()=>{
-                println!("Bundles : {:?}", maybe_bundle_subscribe_response); // It's not possible to listen to bundles unless your a validator hence we disabled this
-            },
+            // maybe_bundle_subscribe_response = bundle_tx_receiver.recv()=>{
+            //     println!("Bundles : {:?}", maybe_bundle_subscribe_response); // It's not possible to listen to bundles unless your a validator hence we disabled this
+            // },
             maybe_pending_tx_notification = pending_tx_receiver.recv() => {
                 // block engine starts forwarding a few slots early, for super high activity accounts
                 // it might be ideal to wait until the leader slot is up
