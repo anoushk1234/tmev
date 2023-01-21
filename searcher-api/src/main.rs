@@ -19,6 +19,17 @@ use tmev_protos::tmev_proto::bundle_service_server::{BundleService, BundleServic
 use tmev_protos::tmev_proto::{Bundle, SubscribeBundlesRequest, SubscribeBundlesResponse};
 
 const TIP_PROGRAM_KEY: &'static str = "T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt";
+const TIP_ACCOUNTS: [&'static str; 9] = [
+    "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU",
+    "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+    "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+    "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+    "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+    "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+    "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+    "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
+    "SysvarS1otHashes111111111111111111111111111",
+];
 // mod tmev;
 #[derive(Default)]
 pub struct MevBundleClient {}
@@ -64,27 +75,42 @@ impl BundleService for MevBundleClient {
                                             .message
                                         {
                                             UiMessage::Raw(message) => {
-                                                // let acc_keys = message
-                                                //     .account_keys
-                                                //     .clone()
-                                                //     .into_iter()
-                                                //     .map(|k| k)
-                                                //     .collect::<Vec<String>>();
+                                                let acc_keys = message.account_keys.clone();
                                                 // let ix   = message.instructions.clone().into_iter().map(|i| i).collect::<Vec<UiCompiledInstruction>>();
                                                 let log_messages =
                                                     tx.meta.clone().unwrap().log_messages.unwrap();
                                                 // println!("checking condition");
-                                                let is_tip = log_messages.iter().any(|x| {
-                                                    return x.contains(TIP_PROGRAM_KEY);
-                                                });
-                                                // for log in log_messages.iter().rev() {
-                                                //     // if !log.contains(TIP_PROGRAM_KEY) {
-                                                //     println!("not tip {}", log);
+                                                // let is_tip = log_messages.iter().any(|x| {
+                                                //     // let mut cond: bool = false;
+                                                //     // for tip_acc in TIP_ACCOUNTS.iter() {
+                                                //     //     cond = x.contains(tip_acc);
                                                 //     // }
-                                                //     tokio::time::sleep(
-                                                //         tokio::time::Duration::from_millis(100),
-                                                //     )
-                                                //     .await;
+                                                //     // return cond;
+                                                //     return TIP_ACCOUNTS.into_iter().any(
+                                                //         |tip_acc| x.contains(&tip_acc.to_string()),
+                                                //     );
+                                                // });
+                                                let is_tip = acc_keys.iter().any(|x| {
+                                                    let cond =
+                                                        TIP_ACCOUNTS.to_vec().contains(&x.as_str());
+                                                    // println!("is tip for cond {}", cond);
+                                                    return cond;
+                                                });
+                                                // println!("is tip {:?}", acc_keys);
+                                                // break;
+                                                // for acc in acc_keys.iter() {
+                                                //     // if !log.contains(TIP_PROGRAM_KEY) {
+                                                //     if acc == "SysvarC1ock11111111111111111111111111111111" || acc == "SysvarRent111111111111111111111111111111111" || acc == "Vote111111111111111111111111111111111111111"{
+                                                //            continue;
+                                                //         }else {
+                                                //             println!("not tip {}", acc);
+                                                //             tokio::time::sleep(
+                                                //                 tokio::time::Duration::from_millis(0),
+                                                //             )
+                                                //             .await;
+                                                //         }
+
+                                                //     // }
                                                 // }
                                                 // println!("is tip {}", is_tip);
                                                 if is_tip {
@@ -190,7 +216,7 @@ pub fn get_picked_bundle(
     txs: Option<Vec<EncodedTransactionWithStatusMeta>>,
     i: usize,
 ) -> Vec<EncodedTransactionWithStatusMeta> {
-    if i > 0 {
+    if i > 4 {
         return txs.unwrap().iter().as_slice()[(i - 4)..i].to_vec();
     } else {
         return txs.unwrap().iter().as_slice()[0..4].to_vec();
@@ -200,12 +226,12 @@ pub fn get_picked_bundle(
 pub fn find_searcher_key_from_tx(tx: EncodedTransaction) -> Option<String> {
     // pass tip tx only
     if let EncodedTransaction::Json(json_tx) = tx {
-        if let UiMessage::Parsed(parsed_msg) = json_tx.message {
-            return Some(parsed_msg.account_keys.get(0).unwrap().pubkey.clone());
+        if let UiMessage::Raw(raw_msg) = json_tx.message {
+            return Some(raw_msg.account_keys.get(1).unwrap().clone());
         } else if let UiMessage::Parsed(parsed_msg) = json_tx.message {
-            return Some(parsed_msg.account_keys.get(0).unwrap().pubkey.clone());
+            return Some(parsed_msg.account_keys.get(1).unwrap().pubkey.clone());
         } else {
-            println!("not parsed msg {:?}", json_tx.message);
+            println!("not parsed msg {:?}", json_tx);
             return None;
         }
     } else {
