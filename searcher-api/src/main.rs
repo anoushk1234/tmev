@@ -117,12 +117,12 @@ impl BundleService for MevBundleClient {
                                                     println!("found tip");
                                                     let picked_bundle =
                                                         get_picked_bundle(block_txns.clone(), i);
+                                                    let bundle_uuid = Uuid::new_v4().to_string();
                                                     for bund in picked_bundle {
                                                         block_update_sender
                                                             .send(SubscribeBundlesResponse {
                                                                 bundle: Some(Bundle {
-                                                                    uuid: Uuid::new_v4()
-                                                                        .to_string(),
+                                                                    uuid: bundle_uuid.clone(),
                                                                     transaction_hash:
                                                                         tx_to_tx_hash(
                                                                             bund.transaction
@@ -165,16 +165,6 @@ impl BundleService for MevBundleClient {
         });
 
         tokio::spawn(async move {
-            // let mut vec = Vec::new();
-            // for i in 0..100 {
-            //     vec.push(SubscribeBundlesResponse {
-            //         bundle: Some(Bundle {
-            //             uuid: Uuid::new_v4().to_string(),
-            //             searcher_key: "searcher_key".to_string(),
-            //             transaction_hash: "transaction_hash".to_string(),
-            //         }),
-            //     })
-            // }
             loop {
                 let block_update = block_update_receiver.recv().await;
                 if let Some(update) = block_update {
@@ -217,9 +207,9 @@ pub fn get_picked_bundle(
     i: usize,
 ) -> Vec<EncodedTransactionWithStatusMeta> {
     if i > 4 {
-        return txs.unwrap().iter().as_slice()[(i - 4)..i].to_vec();
+        return txs.unwrap().iter().as_slice()[(i - 4)..(i + 1)].to_vec();
     } else {
-        return txs.unwrap().iter().as_slice()[0..4].to_vec();
+        return txs.unwrap().iter().as_slice()[0..5].to_vec();
     }
 }
 
