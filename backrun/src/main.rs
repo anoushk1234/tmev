@@ -146,7 +146,8 @@ fn build_bundles(
         .into_iter()
         .filter_map(|packet| {
             let mempool_tx = versioned_tx_from_packet(&packet)?;
-            let tip_account = tip_accounts[rng.gen_range(0..tip_accounts.len())];
+            let tip_account =
+                Pubkey::from_str("96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5").unwrap();
 
             let backrun_tx = VersionedTransaction::from(Transaction::new_signed_with_payer(
                 &[

@@ -2014,6 +2014,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "jito-searcher-cli"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "chrono",
+ "clap 4.1.1",
+ "crossbeam-channel",
+ "env_logger 0.9.0",
+ "futures",
+ "futures-util",
+ "histogram",
+ "jito-protos",
+ "log",
+ "prost-types 0.8.0",
+ "rand 0.8.5",
+ "searcher-service-client",
+ "solana-client",
+ "solana-metrics",
+ "solana-sdk",
+ "solana-transaction-status",
+ "spl-memo",
+ "thiserror",
+ "tokio",
+ "tonic 0.5.2",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"

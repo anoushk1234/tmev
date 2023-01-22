@@ -11,7 +11,7 @@ message SubscribeBundlesRequest {
 }
 
 message SubscribeBundlesResponse {
-    Bundle bundle = 1;
+    repeated Bundle bundles = 1;
 }
 
 message Bundle {

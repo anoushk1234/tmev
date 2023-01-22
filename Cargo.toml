@@ -5,7 +5,8 @@ members = [
     "searcher_service_client",
     "searcher-api",
     "tmev-cli",
-    "tmev-protos"
+    "tmev-protos",
+    "searcher-cli"
 ]
 
 # exclude=["tmev-cli"]
