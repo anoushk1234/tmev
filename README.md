@@ -7,8 +7,8 @@ Jito solana is a validator optimised for mev on solana. The way it works is jito
 
 ## So what are we solving
 We're solving two problems:
-- searchers need a quick terminal ui to explore arbitrage txns, liquidations, and the bundles that are being sent to the validator so they can see their bundles and also inspect bundles sent by other searchers, for this we built [tmev-cli](https://github.com/anoushk1234/tmev/tmev-cli), demo:
-- there's no way to read sent bundles from the block engine other than being a validator so we built our own gRPC server with a custom bundle parsing algorithm that parses the latest blocks from Jito's RPC and runs it through our algo to parse them into bundles and stream it to your client, check it out in [bundle-stream](https://github.com/anoushk1234/tmev/blob/master/searcher-api/src/main.rs) demo:
+- searchers need a quick terminal ui to explore arbitrage txns, liquidations, and the bundles that are being sent to the validator so they can see their bundles and also inspect bundles sent by other searchers, for this we built [tmev-cli](https://github.com/anoushk1234/tmev/tmev-cli), demo: https://www.loom.com/share/4abb634327ef4575852b0975ac09e890
+- there's no way to read sent bundles from the block engine other than being a validator so we built our own gRPC server with a custom bundle parsing algorithm that parses the latest blocks from Jito's RPC and runs it through our algo to parse them into bundles and stream it to your client, check it out in [bundle-stream](https://github.com/anoushk1234/tmev/blob/master/searcher-api/src/main.rs) demo: https://www.loom.com/share/a53e256124ee48baa6e0bc4f8f8e6d8c
 
 ## Tmev cli app 
  + Queries the latest arbitrages from Jito's MEV dashboard and displays it in a nice tabular form. In addition to that, 
