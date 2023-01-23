@@ -8,7 +8,7 @@ A searcher's terminal UI dashboard built using [tui.rs](https://docs.rs/tui/late
 
 
 ## Getting Started
-Run ```sh watch.sh``` command to run 
+Run ```sh watch.sh```
 
 Run ```cargo r -r arbs``` in your terminal 
 After the terminal displays you could use ```Left``` or ```Right``` arrow keys to navigate between tabs.
