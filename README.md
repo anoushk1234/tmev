@@ -18,8 +18,8 @@ We're solving two problems:
 
 
 #### Usage
-Add a .env in `searcher-api`, refer .env.example .
-Run `cargo r -r` or `sh watch.sh` in `searcher-api/` as this will start the server.
-Run ```cargo r -r -- --arbs <searcher-pubkey>``` or ```sh install.sh``` in your terminal 
-After the terminal displays you could use ```Left``` or ```Right``` arrow keys to navigate between tabs.
-To scroll use ```Up``` or ```Down``` arrow keys and to quit press ```Q```.
+- Add a .env in `searcher-api`, refer .env.example .
+- Run `cargo r -r` or `sh watch.sh` in `searcher-api/` as this will start the server.
+- Run ```cargo r -r -- --arbs <searcher-pubkey>``` or ```sh install.sh``` in your terminal 
+- After the terminal displays you could use ```Left``` or ```Right``` arrow keys to navigate between tabs.
+- To scroll use ```Up``` or ```Down``` arrow keys and to quit press ```Q```.
