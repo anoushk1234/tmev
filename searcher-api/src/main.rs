@@ -1,19 +1,24 @@
-// mod api;
-// mod models;
-// mod repository;
+mod api;
+mod models;
+mod repository;
+
+use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
+use models::BlockBundles;
+use reqwest::header::CONTENT_TYPE;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::*;
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 use tokio_stream::StreamExt;
-// use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
+
+use api::block_bundles_api;
 // use api::*;
 // use repository::{BundleRepo, BundledTransactionRepo};
 use std::env;
 use std::str::FromStr;
 use thiserror::Error;
 use tokio::runtime::Builder;
-use tokio::sync::mpsc::{self, channel, unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{self, channel, unbounded_channel, UnboundedReceiver, UnboundedSender};
 // use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
@@ -60,13 +65,9 @@ impl BundleService for MevBundleClient {
         &self,
         request: Request<SubscribeBundlesRequest>,
     ) -> EchoResult<Self::SubscribeBundlesStream> {
-        // creating a queue or channel
-        // let (mut send_stream_tx, rx) = channel(4);
         let (block_sender, mut block_receiver) = unbounded_channel();
         let (block_update_sender, mut block_update_receiver) = unbounded_channel();
         // let (slot_sender, mut slot_receiver) = channel(100);
-        // spawn and channel are required if you want handle "disconnect" functionality
-        // the `out_stream` will not be polled after client disconnect
 
         let (mut tx, rx) = mpsc::unbounded_channel();
         let rpc_pub_sub = env::var("RPC_PUB_SUB").unwrap();
@@ -75,9 +76,8 @@ impl BundleService for MevBundleClient {
         tokio::spawn(async move {
             // looping and sending our response using stream
             loop {
-                // println!("here in");
                 let rec = block_receiver.recv().await;
-                // println!("here out {:?}", rec);
+
                 match rec {
                     Some(res) => {
                         if let Some(block) = res.value.block {
@@ -163,6 +163,7 @@ impl BundleService for MevBundleClient {
                                                         .unwrap();
 
                                                     println!("bundles sent hasu");
+                                                    break; // only for demo
                                                 }
                                             }
                                             _ => println!("empty match"),
@@ -256,9 +257,135 @@ pub fn find_searcher_key_from_tx(tx: EncodedTransaction) -> Option<String> {
     }
 }
 
-//std::io::Result<()>
+pub async fn update_db_with_bundles(
+    mut block_receiver: UnboundedReceiver<rpc_response::Response<RpcBlockUpdate>>,
+    // block_update_sender: UnboundedSender<BlockBundles>,
+) {
+    loop {
+        let rec = block_receiver.recv().await;
+
+        match rec {
+            Some(res) => {
+                if let Some(block) = res.value.block {
+                    println!("block here {}", res.context.slot);
+
+                    if let Some(ref blk_txns) = block.transactions {
+                        for (i, tx) in blk_txns.into_iter().enumerate() {
+                            let block_txns = block.transactions.clone();
+                            // println!("gets block txns");
+                            match &tx.transaction {
+                                EncodedTransaction::Json(inner_tx) => match &inner_tx.message {
+                                    UiMessage::Raw(message) => {
+                                        let acc_keys = message.account_keys.clone();
+                                        // let ix   = message.instructions.clone().into_iter().map(|i| i).collect::<Vec<UiCompiledInstruction>>();
+                                        let log_messages =
+                                            tx.meta.clone().unwrap().log_messages.unwrap();
+                                        // println!("checking condition");
+                                        // let is_tip = log_messages.iter().any(|x| {
+                                        //     // let mut cond: bool = false;
+                                        //     // for tip_acc in TIP_ACCOUNTS.iter() {
+                                        //     //     cond = x.contains(tip_acc);
+                                        //     // }
+                                        //     // return cond;
+                                        //     return TIP_ACCOUNTS.into_iter().any(
+                                        //         |tip_acc| x.contains(&tip_acc.to_string()),
+                                        //     );
+                                        // });
+                                        let tip_accounts = get_tip_accounts(
+                                            &Pubkey::from_str(TIP_PROGRAM_KEY).unwrap(),
+                                        );
+                                        let is_tip = acc_keys.iter().any(|x| {
+                                            // derivation is for tip accounts but for testing we can use TIP_ACCOUNTS
+                                            // let cond = tip_accounts.contains(
+                                            //     &Pubkey::from_str(&x.as_str()).unwrap(),
+                                            // );
+                                            let cond = TIP_ACCOUNTS.contains(&x.as_str());
+                                            return cond;
+                                        });
+                                        // println!("is tip {:?}", acc_keys);
+                                        // break;
+                                        // for acc in acc_keys.iter() {
+                                        //     // if !log.contains(TIP_PROGRAM_KEY) {
+                                        //     if acc == "SysvarC1ock11111111111111111111111111111111" || acc == "SysvarRent111111111111111111111111111111111" || acc == "Vote111111111111111111111111111111111111111"{
+                                        //            continue;
+                                        //         }else {
+                                        //             println!("not tip {}", acc);
+                                        //             tokio::time::sleep(
+                                        //                 tokio::time::Duration::from_millis(0),
+                                        //             )
+                                        //             .await;
+                                        //         }
+
+                                        //     // }
+                                        // }
+                                        // println!("is tip {}", is_tip);
+                                        if is_tip {
+                                            println!("found tip");
+                                            let picked_bundle =
+                                                get_picked_bundle(block_txns.clone(), i);
+                                            let bundle_uuid = Uuid::new_v4().to_string();
+                                            let mut bundle_vec = Vec::new();
+                                            for bund in picked_bundle {
+                                                bundle_vec.push(SingleBundle {
+                                                    uuid: bundle_uuid.clone(),
+                                                    transaction_hash: tx_to_tx_hash(
+                                                        bund.transaction.clone(),
+                                                    )
+                                                    .unwrap(),
+                                                    searcher_key: find_searcher_key_from_tx(
+                                                        tx.transaction.clone(),
+                                                    )
+                                                    .unwrap_or("no key".to_string()),
+                                                });
+                                            }
+                                            println!("sending bundles");
+                                            // block_update_sender
+                                            //     .send(
+                                            //         BlockBundles { id: None, bundles: () }
+                                            //     )
+                                            //     .unwrap();
+                                            // make api call to update db with bundle
+                                            let client = reqwest::Client::new();
+                                            let body = serde_json::json!({ "bundles": bundle_vec });
+                                            let res = client
+                                                .post("http://0.0.0.0:8080/bundles/create")
+                                                .header(CONTENT_TYPE, "application/json")
+                                                .body(body.to_string())
+                                                .send()
+                                                .await
+                                                .unwrap()
+                                                .text()
+                                                .await
+                                                .unwrap();
+                                            println!(
+                                                "bundles sent periodically {:?} {:?}",
+                                                res,
+                                                body.to_string()
+                                            );
+                                            // break; // only for demo
+                                        }
+                                    }
+                                    _ => println!("empty match"),
+                                },
+                                _ => println!("empty match outer"),
+                            }
+                        }
+                    }
+                } else {
+                    println!("No block found {:?}", res);
+                }
+            }
+            None => {
+                // println!("No blockS found");
+                continue;
+            }
+        }
+        // tokio::time::sleep(Duration::from_secs(15)).await;
+    }
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "1");
     env_logger::init();
     // let runtime = Builder::new_multi_thread().enable_all().build().unwrap();_
@@ -267,51 +394,51 @@ async fn main() {
     // let db_data = Data::new(db);
     // let new_db = BundledTransactionRepo::init().await?;
     // let new_db_data = Data::new(new_db);
-
+    let block_bundles_repo = BlockBundlesRepo::init().await;
+    let block_bundles_data = Data::new(block_bundles_repo);
     // let (slot_sender, slot_receiver) = channel(100);
 
     dotenv().ok();
-    // tokio::spawn(async move {
-    //     let rpc_url = std::env::var("RPC_URL").expect("cant read env");
-    //     // println!("here: {:?}", rpc_url);
-    //     // slot_subscribe_loop(rpc_url.unwrap(), slot_sender);
-    // });
+    // let (block_sender, mut block_receiver) = tokio::sync::mpsc::unbounded_channel();
+    // let (block_update_sender, block_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    // tokio::spawn(async move {
+    let rpc_pub_sub = env::var("RPC_PUB_SUB").unwrap();
+    // tokio::spawn(block_subscribe_loop(rpc_pub_sub, block_sender));
+    // tokio::spawn(update_db_with_bundles(block_receiver));
 
-    let addr = "0.0.0.0:5005".parse().unwrap();
-    let mev_client = MevBundleClient::default();
-    println!("Server listening on {}", addr);
-    Server::builder()
-        .add_service(BundleServiceServer::new(mev_client))
-        .serve(addr)
-        .await
-        .ok()
-        .expect("Error Starting Server");
+    tokio::spawn(async {
+        let addr = "0.0.0.0:5005".parse().unwrap();
+        let mev_client = MevBundleClient::default();
+        println!("Server listening on {}", addr);
+        Server::builder()
+            .add_service(BundleServiceServer::new(mev_client))
+            .serve(addr)
+            .await
+            .ok()
+            .expect("Error Starting Server");
+    });
     // });
-    // HttpServer::new(move || {
-    //     App::new()
-    //         .app_data(db_data.clone())
-    //         .service(create_bundle_stats)
-    //         .service(get_all_bundle_stats)
-    //         .app_data(new_db_data.clone())
-    //         .service(create_bundled_transaction)
-    //         .service(get_all_bundle_transactions)
-    //         .service(get_bundled_transaction_by_searcher)
-    //         .service(create_bundled_transactions)
-    // })
-    // .bind(("0.0.0.0", 8080))?
-    // .run()
-    // .await
+    println!("Mongo Server listening on 0.0.0.0:8080");
+    HttpServer::new(move || {
+        App::new()
+            .app_data(block_bundles_data.clone())
+            .service(block_bundles_api::create_many)
+            .service(block_bundles_api::create_one)
+            .service(block_bundles_api::get_all)
+    })
+    .bind(("0.0.0.0", 8080))
+    .unwrap()
+    .run()
+    .await
 }
 
 // use actix_web::rt::time::sleep;
 use futures::Stream;
-use solana_client::client_error::ClientError;
+use solana_client::client_error::{reqwest, ClientError};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::pubsub_client::PubsubClientError;
 use solana_client::rpc_config::{RpcBlockSubscribeConfig, RpcBlockSubscribeFilter};
-use solana_client::rpc_response;
+use solana_client::rpc_response::{self};
 use solana_client::rpc_response::{RpcBlockUpdate, SlotUpdate};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::clock::Slot;
@@ -322,6 +449,9 @@ use solana_transaction_status::{
 };
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
+
+use crate::models::SingleBundle;
+use crate::repository::BlockBundlesRepo;
 // use tokio::time::sleep;
 pub async fn block_subscribe_loop(
     pubsub_addr: String,

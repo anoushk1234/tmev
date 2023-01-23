@@ -16,7 +16,7 @@ use mongodb::{
 pub struct BundledTransactionRepo {
     col: Collection<BundledTransaction>,
 }
-
+// FILE DEPRECATED!!!!
 impl BundledTransactionRepo {
     pub async fn init() -> Self {
         dotenv().ok();
