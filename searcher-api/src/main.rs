@@ -162,7 +162,7 @@ impl BundleService for MevBundleClient {
                                                         })
                                                         .unwrap();
 
-                                                    println!("bundles sent hasu");
+                                                    println!("bundles sent");
                                                     break; // only for demo
                                                 }
                                             }
@@ -336,6 +336,7 @@ pub async fn update_db_with_bundles(
                                                         tx.transaction.clone(),
                                                     )
                                                     .unwrap_or("no key".to_string()),
+                                                    slot: res.context.slot.to_string(),
                                                 });
                                             }
                                             println!("sending bundles");
@@ -575,20 +576,4 @@ pub async fn slot_subscribe_loop(pubsub_addr: String, mut slot_sender: Sender<Sl
             }
         }
     }
-}
-
-#[derive(Debug, Error)]
-enum BundleSubscribeError {
-    #[error("TonicError {0}")]
-    TonicError(#[from] tonic::transport::Error),
-    #[error("GrpcError {0}")]
-    GrpcError(#[from] Status),
-    #[error("RpcError {0}")]
-    RpcError(#[from] ClientError),
-    #[error("PubSubError {0}")]
-    PubSubError(#[from] PubsubClientError),
-    // #[error("BlockEngineConnectionError {0}")]
-    // BlockEngineConnectionError(#[from] BlockEngineConnectionError),
-    #[error("Shutdown")]
-    Shutdown,
 }

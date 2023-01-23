@@ -13,4 +13,5 @@ pub struct SingleBundle {
     pub searcher_key: String,
     pub uuid: String,
     pub transaction_hash: String,
+    pub slot: String,
 }
