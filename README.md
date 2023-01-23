@@ -7,4 +7,4 @@ This cli app queries the latest arbitrages from Jito's MEV dashboard and display
 ## Usage
 Run ```cargo r -r arbs``` in your terminal 
 After the terminal displays you could use ```Left``` or ```Right``` arrow keys to navigate between tabs.
-To scroll use ```Up``` or ```Down``` arrow keys.
+To scroll use ```Up``` or ```Down``` arrow keys and to quit press ```Q```.
