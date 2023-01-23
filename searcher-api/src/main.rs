@@ -389,23 +389,16 @@ pub async fn update_db_with_bundles(
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "1");
     env_logger::init();
-    // let runtime = Builder::new_multi_thread().enable_all().build().unwrap();_
-
-    // let db = BundleRepo::init().await;
-    // let db_data = Data::new(db);
-    // let new_db = BundledTransactionRepo::init().await?;
-    // let new_db_data = Data::new(new_db);
+  
     let block_bundles_repo = BlockBundlesRepo::init().await;
     let block_bundles_data = Data::new(block_bundles_repo);
-    // let (slot_sender, slot_receiver) = channel(100);
 
     dotenv().ok();
-    // let (block_sender, mut block_receiver) = tokio::sync::mpsc::unbounded_channel();
-    // let (block_update_sender, block_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (block_sender, mut block_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let rpc_pub_sub = env::var("RPC_PUB_SUB").unwrap();
-    // tokio::spawn(block_subscribe_loop(rpc_pub_sub, block_sender));
-    // tokio::spawn(update_db_with_bundles(block_receiver));
+     tokio::spawn(block_subscribe_loop(rpc_pub_sub, block_sender));
+     tokio::spawn(update_db_with_bundles(block_receiver));
 
     tokio::spawn(async {
         let addr = "0.0.0.0:5005".parse().unwrap();
