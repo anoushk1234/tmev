@@ -27,7 +27,7 @@ use tmev_protos::tmev_proto::bundle_service_server::{BundleService, BundleServic
 use tmev_protos::tmev_proto::{Bundle, SubscribeBundlesRequest, SubscribeBundlesResponse};
 
 const TIP_PROGRAM_KEY: &'static str = "T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt";
-const TIP_ACCOUNTS: [&'static str; 9] = [
+const TIP_ACCOUNTS: [&'static str; 8] = [
     "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU",
     "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
     "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
@@ -36,7 +36,7 @@ const TIP_ACCOUNTS: [&'static str; 9] = [
     "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
     "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
     "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
-    "Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD", // pyth usdc price acc for testing for mainnet
+    // pyth usdc price acc for testing for mainnet
 ];
 const TIP_PROGRAM: Pubkey = pubkey!("T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt");
 fn get_tip_accounts(tip_program_pubkey: &Pubkey) -> Vec<Pubkey> {
@@ -112,10 +112,10 @@ impl BundleService for MevBundleClient {
                                                 );
                                                 let is_tip = acc_keys.iter().any(|x| {
                                                     // derivation is for tip accounts but for testing we can use TIP_ACCOUNTS
-                                                    // let cond = tip_accounts.contains(
-                                                    //     &Pubkey::from_str(&x.as_str()).unwrap(),
-                                                    // );
-                                                    let cond = TIP_ACCOUNTS.contains(&x.as_str());
+                                                    let cond = tip_accounts.contains(
+                                                        &Pubkey::from_str(&x.as_str()).unwrap(),
+                                                    );
+                                                    // let cond = TIP_ACCOUNTS.contains(&x.as_str());
                                                     return cond;
                                                 });
                                                 // println!("is tip {:?}", acc_keys);
@@ -163,7 +163,7 @@ impl BundleService for MevBundleClient {
                                                         .unwrap();
 
                                                     println!("bundles sent");
-                                                    break; // only for demo
+                                                    // break; // only for demo
                                                 }
                                             }
                                             _ => println!("empty match"),
@@ -389,19 +389,19 @@ pub async fn update_db_with_bundles(
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "1");
     env_logger::init();
-  
+
     let block_bundles_repo = BlockBundlesRepo::init().await;
     let block_bundles_data = Data::new(block_bundles_repo);
 
     dotenv().ok();
-    let (block_sender, mut block_receiver) = tokio::sync::mpsc::unbounded_channel();
+    // let (block_sender, mut block_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let rpc_pub_sub = env::var("RPC_PUB_SUB").unwrap();
-     tokio::spawn(block_subscribe_loop(rpc_pub_sub, block_sender));
-     tokio::spawn(update_db_with_bundles(block_receiver));
+    // tokio::spawn(block_subscribe_loop(rpc_pub_sub, block_sender));
+    // tokio::spawn(update_db_with_bundles(block_receiver));
 
     tokio::spawn(async {
-        let addr = "0.0.0.0:5005".parse().unwrap();
+        let addr = "0.0.0.0:5006".parse().unwrap();
         let mev_client = MevBundleClient::default();
         println!("Server listening on {}", addr);
         Server::builder()
@@ -412,7 +412,7 @@ async fn main() -> std::io::Result<()> {
             .expect("Error Starting Server");
     });
     // });
-    println!("Mongo Server listening on 0.0.0.0:8080");
+    println!("Mongo Server listening on 0.0.0.0:8000");
     HttpServer::new(move || {
         App::new()
             .app_data(block_bundles_data.clone())
@@ -420,7 +420,7 @@ async fn main() -> std::io::Result<()> {
             .service(block_bundles_api::create_one)
             .service(block_bundles_api::get_all)
     })
-    .bind(("0.0.0.0", 8080))
+    .bind(("0.0.0.0", 8000))
     .unwrap()
     .run()
     .await
